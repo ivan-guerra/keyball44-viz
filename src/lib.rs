@@ -1,7 +1,9 @@
 use anyhow::Result;
 use regex::Regex;
-use svg::node::element::{Rectangle, Style, Text};
-use svg::Document;
+use svg::{
+    node::element::{Definitions, LinearGradient, Rectangle, Stop, Style, Text},
+    Document,
+};
 
 #[derive(Debug, Clone)]
 pub struct Layer {
@@ -124,6 +126,107 @@ fn parse_keys_with_parens(line: &str) -> Vec<String> {
     keys
 }
 
+fn add_gradients(document: Document) -> Document {
+    let mut defs = Definitions::new();
+
+    // Default key gradient (GMK WoB/BoW style - light grey)
+    let key_gradient = LinearGradient::new()
+        .set("id", "keyGradient")
+        .set("x1", "0%")
+        .set("y1", "0%")
+        .set("x2", "0%")
+        .set("y2", "100%")
+        .add(Stop::new().set("offset", "0%").set("stop-color", "#e8e8e8"))
+        .add(
+            Stop::new()
+                .set("offset", "100%")
+                .set("stop-color", "#d0d0d0"),
+        );
+
+    // Layer-specific gradients using GMK-inspired colors
+    let layer_colors = vec![
+        ("#7cb0d9", "#5a8fb8"), // Layer 1 - GMK Blue (Dolch/Nautilus blue)
+        ("#b888c4", "#9668a8"), // Layer 2 - GMK Purple (Laser purple)
+        ("#d97c7c", "#c25858"), // Layer 3 - GMK Red (Red Samurai red)
+        ("#e8a87c", "#d18a58"), // Layer 4 - GMK Orange (Camping orange)
+        ("#7ec4a8", "#5ca888"), // Layer 5 - GMK Teal (Cyan/Miami teal)
+        ("#88c47c", "#68a858"), // Layer 6 - GMK Green (Botanical green)
+        ("#d4c47c", "#b8a858"), // Layer 7 - GMK Yellow (Honey yellow)
+        ("#a8a8a8", "#888888"), // Layer 8 - GMK Dark Grey (modifier grey)
+    ];
+
+    for (idx, (light, dark)) in layer_colors.iter().enumerate() {
+        let gradient = LinearGradient::new()
+            .set("id", format!("layer{}Gradient", idx + 1))
+            .set("x1", "0%")
+            .set("y1", "0%")
+            .set("x2", "0%")
+            .set("y2", "100%")
+            .add(Stop::new().set("offset", "0%").set("stop-color", *light))
+            .add(Stop::new().set("offset", "100%").set("stop-color", *dark));
+        defs = defs.add(gradient);
+    }
+
+    // Special key gradient (GMK accent teal)
+    let special_gradient = LinearGradient::new()
+        .set("id", "specialGradient")
+        .set("x1", "0%")
+        .set("y1", "0%")
+        .set("x2", "0%")
+        .set("y2", "100%")
+        .add(Stop::new().set("offset", "0%").set("stop-color", "#7ec4a8"))
+        .add(
+            Stop::new()
+                .set("offset", "100%")
+                .set("stop-color", "#5ca888"),
+        );
+
+    defs = defs.add(key_gradient);
+    defs = defs.add(special_gradient);
+
+    document.add(defs)
+}
+
+fn get_key_class(key: &str, layer_index: usize) -> String {
+    if is_empty_key(key) {
+        return "key key-empty".to_string();
+    }
+
+    // For Layer 0, check if it's a layer switch modifier
+    if layer_index == 0 {
+        if let Some(layer_num) = extract_layer_number(key) {
+            return format!("key key-layer{}", layer_num);
+        }
+
+        // Check for special functions
+        if key.starts_with("RGB_")
+            || key.starts_with("BL_")
+            || key.starts_with("RESET")
+            || key.starts_with("QK_")
+        {
+            return "key key-special".to_string();
+        }
+
+        // Default for Layer 0 non-modifier keys
+        return "key".to_string();
+    }
+
+    // For other layers, all non-empty keys get the layer color
+    format!("key key-layer{}", layer_index)
+}
+
+fn extract_layer_number(key: &str) -> Option<usize> {
+    // Extract layer number from MO(n), TO(n), TG(n)
+    // Exclude LT (Layer Tap) as it's a dual-function key, not a pure layer switch
+    if key.starts_with("MO(") || key.starts_with("TO(") || key.starts_with("TG(") {
+        let start = key.find('(')? + 1;
+        let end = key.find(')')?;
+        key[start..end].parse().ok()
+    } else {
+        None
+    }
+}
+
 pub fn generate_svg(layers: &[Layer]) -> String {
     const KEY_HEIGHT: f32 = 60.0;
     const KEY_SPACING: f32 = 5.0;
@@ -173,55 +276,83 @@ pub fn generate_svg(layers: &[Layer]) -> String {
         .set("height", total_height as i32)
         .set("viewBox", (0, 0, svg_width as i32, total_height as i32));
 
-    // Add styles
+    // Add enhanced styles with gradients, shadows, and color coding
     let style = Style::new(
         r#"
-        .key { fill: white; stroke: #333; stroke-width: 2; }
-        .key-text { fill: #333; font-family: monospace; font-size: 11px; text-anchor: middle; }
-        .layer-title { fill: #333; font-family: sans-serif; font-size: 20px; font-weight: bold; }
+        .key {
+            fill: url(#keyGradient);
+            stroke: #2c3e50;
+            stroke-width: 2;
+            filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.2));
+            transition: all 0.3s ease;
+        }
+        .key:hover {
+            filter: drop-shadow(3px 3px 5px rgba(0,0,0,0.3));
+            transform: translateY(-2px);
+        }
+        .key-layer1 { fill: url(#layer1Gradient); }
+        .key-layer2 { fill: url(#layer2Gradient); }
+        .key-layer3 { fill: url(#layer3Gradient); }
+        .key-layer4 { fill: url(#layer4Gradient); }
+        .key-layer5 { fill: url(#layer5Gradient); }
+        .key-layer6 { fill: url(#layer6Gradient); }
+        .key-layer7 { fill: url(#layer7Gradient); }
+        .key-layer8 { fill: url(#layer8Gradient); }
+        .key-special { fill: url(#specialGradient); }
+        .key-empty { fill: #ecf0f1; opacity: 0.5; }
+        
+        .key-text {
+            fill: #2c3e50;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+        .layer-title {
+            fill: #34495e;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
     "#,
     );
     document = document.add(style);
 
+    // Add gradient definitions
+    document = add_gradients(document);
+
     let mut y_offset = MARGIN;
 
-    // Render each layer
     for layer in layers {
-        // Layer title
+        // Draw layer title
         let title = Text::new("")
-            .set("x", MARGIN)
-            .set("y", y_offset + 30.0)
             .set("class", "layer-title")
+            .set("x", MARGIN)
+            .set("y", y_offset)
             .add(svg::node::Text::new(format!("Layer {}", layer.index)));
         document = document.add(title);
+        y_offset += 40.0;
 
-        let layer_start_y = y_offset + 50.0;
+        // Draw keys for each row
+        for (row_idx, row) in layer.keys.iter().enumerate() {
+            if row_idx >= layout.len() {
+                continue;
+            }
 
-        // Flatten all keys from the layer
-        let all_keys: Vec<&String> = layer.keys.iter().flat_map(|row| row.iter()).collect();
+            let (left_count, left_offset, right_count, right_offset) = layout[row_idx];
+            let y = y_offset + row_idx as f32 * (KEY_HEIGHT + KEY_SPACING);
 
-        let mut key_index = 0;
-        let right_start_x = MARGIN + left_width + SPLIT_GAP;
-
-        // Render each row (left + right together)
-        for (row_idx, &(left_keys, left_offset, right_keys, right_offset)) in
-            layout.iter().enumerate()
-        {
-            let y = layer_start_y + row_idx as f32 * (KEY_HEIGHT + KEY_SPACING);
-
-            // Render left side of this row
-            let left_x_offset = left_offset * (key_width + KEY_SPACING);
-            for col_idx in 0..left_keys {
-                if key_index >= all_keys.len() {
-                    break;
-                }
-
-                let x = MARGIN + left_x_offset + col_idx as f32 * (key_width + KEY_SPACING);
-                let key = all_keys[key_index];
+            // Draw left half keys
+            for (col_idx, key) in row.iter().take(left_count as usize).enumerate() {
+                let x = MARGIN
+                    + left_offset * (key_width + KEY_SPACING)
+                    + col_idx as f32 * (key_width + KEY_SPACING);
 
                 // Draw key
                 let rect = Rectangle::new()
-                    .set("class", "key")
+                    .set("class", get_key_class(key, layer.index))
                     .set("x", x)
                     .set("y", y)
                     .set("width", key_width)
@@ -236,63 +367,31 @@ pub fn generate_svg(layers: &[Layer]) -> String {
                     .set("y", y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0)
                     .add(svg::node::Text::new(key.as_str()));
                 document = document.add(text);
-
-                key_index += 1;
             }
 
-            // Render right side of this row
-            let right_x_offset = right_offset * (key_width + KEY_SPACING);
+            // Draw right half keys
+            let right_start_idx = left_count as usize;
+            let right_base_x = MARGIN + left_width + SPLIT_GAP;
 
-            // Special handling for bottom row (row 3) - last key aligned with 4th key above
-            if row_idx == 3 {
-                for col_idx in 0..right_keys {
-                    if key_index >= all_keys.len() {
-                        break;
-                    }
+            for (col_idx, key) in row
+                .iter()
+                .skip(right_start_idx)
+                .take(right_count as usize)
+                .enumerate()
+            {
+                let x = right_base_x
+                    + right_offset * (key_width + KEY_SPACING)
+                    + col_idx as f32 * (key_width + KEY_SPACING);
 
-                    let x = if col_idx < 2 {
-                        // First 2 keys: staggered left by 1
-                        right_start_x + right_x_offset + col_idx as f32 * (key_width + KEY_SPACING)
-                    } else {
-                        // Last key: aligned with 4th key in row above
-                        right_start_x + 3.0 * (key_width + KEY_SPACING)
-                    };
-
-                    let key = all_keys[key_index];
-
-                    // Draw key
-                    let rect = Rectangle::new()
-                        .set("class", "key")
-                        .set("x", x)
-                        .set("y", y)
-                        .set("width", key_width)
-                        .set("height", KEY_HEIGHT)
-                        .set("rx", 5);
-                    document = document.add(rect);
-
-                    // Draw key label
-                    let text = Text::new("")
-                        .set("class", "key-text")
-                        .set("x", x + key_width / 2.0)
-                        .set("y", y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0)
-                        .add(svg::node::Text::new(key.as_str()));
-                    document = document.add(text);
-
-                    key_index += 1;
+                // Skip if this is an empty position in the layout
+                if row_idx == 3 && col_idx >= 3 {
+                    continue;
                 }
-            } else {
-                for col_idx in 0..right_keys {
-                    if key_index >= all_keys.len() {
-                        break;
-                    }
 
-                    let x =
-                        right_start_x + right_x_offset + col_idx as f32 * (key_width + KEY_SPACING);
-                    let key = all_keys[key_index];
-
+                if !is_empty_key(key) || row_idx < 3 {
                     // Draw key
                     let rect = Rectangle::new()
-                        .set("class", "key")
+                        .set("class", get_key_class(key, layer.index))
                         .set("x", x)
                         .set("y", y)
                         .set("width", key_width)
@@ -307,14 +406,38 @@ pub fn generate_svg(layers: &[Layer]) -> String {
                         .set("y", y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0)
                         .add(svg::node::Text::new(key.as_str()));
                     document = document.add(text);
+                }
+            }
 
-                    key_index += 1;
+            // Draw remaining keys from row (if any beyond the split)
+            let remaining_start = right_start_idx + right_count as usize;
+            if remaining_start < row.len() {
+                for (offset, key) in row.iter().skip(remaining_start).enumerate() {
+                    let x = right_base_x
+                        + (right_count as f32 + offset as f32) * (key_width + KEY_SPACING);
+
+                    // Draw key
+                    let rect = Rectangle::new()
+                        .set("class", get_key_class(key, layer.index))
+                        .set("x", x)
+                        .set("y", y)
+                        .set("width", key_width)
+                        .set("height", KEY_HEIGHT)
+                        .set("rx", 5);
+                    document = document.add(rect);
+
+                    // Draw key label
+                    let text = Text::new("")
+                        .set("class", "key-text")
+                        .set("x", x + key_width / 2.0)
+                        .set("y", y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0)
+                        .add(svg::node::Text::new(key.as_str()));
+                    document = document.add(text);
                 }
             }
         }
 
-        let layer_height = 4.0 * (KEY_HEIGHT + KEY_SPACING) + 50.0;
-        y_offset += layer_height + LAYER_SPACING;
+        y_offset += 4.0 * (KEY_HEIGHT + KEY_SPACING) + LAYER_SPACING;
     }
 
     document.to_string()
