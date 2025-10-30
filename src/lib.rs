@@ -1,3 +1,5 @@
+//! A CLI tool that parses QMK keymap.c files for the Keyball44 keyboard and
+//! generates an SVG visualization of all layers with color-coded keys.
 use anyhow::Result;
 use regex::Regex;
 use svg::{
@@ -5,12 +7,32 @@ use svg::{
     Document,
 };
 
+/// Represents a single keymap layer in the keyboard layout.
+///
+/// Each layer contains an index identifier and a 2D grid of key labels,
+/// where each inner vector represents a row of keys on the keyboard.
 #[derive(Debug, Clone)]
 pub struct Layer {
+    /// The layer number/identifier (e.g., 0 for base layer, 1 for first modifier layer)
     pub index: usize,
+    /// A 2D vector representing rows and columns of key labels on this layer
     pub keys: Vec<Vec<String>>,
 }
 
+/// Parses QMK keymap C code to extract layer definitions.
+///
+/// This function reads through QMK firmware keymap source code and extracts
+/// all keyboard layers defined within the `keymaps` array. It handles various
+/// LAYOUT macro formats (LAYOUT, LAYOUT_split_3x5_3, etc.) and parses the
+/// key definitions within each layer.
+///
+/// # Arguments
+///
+/// * `content` - A string slice containing the QMK keymap C source code
+///
+/// # Returns
+///
+/// * `Result<Vec<Layer>>` - A vector of parsed Layer structs, or an error if parsing fails
 pub fn parse_layers(content: &str) -> Result<Vec<Layer>> {
     let mut layers = Vec::new();
     let mut in_keymaps = false;
@@ -78,6 +100,18 @@ pub fn parse_layers(content: &str) -> Result<Vec<Layer>> {
     Ok(layers)
 }
 
+/// Checks if a key string represents an empty key.
+///
+/// A key is considered empty if it consists entirely of underscore characters.
+/// This is commonly used in keyboard layouts to represent unassigned or blank keys.
+///
+/// # Arguments
+///
+/// * `key` - A string slice representing the key to check
+///
+/// # Returns
+///
+/// Returns `true` if the key contains only underscores, `false` otherwise.
 pub fn is_empty_key(key: &str) -> bool {
     key.chars().all(|c| c == '_')
 }
@@ -236,6 +270,19 @@ fn extract_layer_number(key: &str) -> Option<usize> {
     }
 }
 
+/// Generates an SVG visualization of keyboard layers.
+///
+/// Creates a comprehensive SVG document displaying multiple keyboard layers with
+/// proper spacing, gradients, and interactive styling. Each layer is rendered
+/// separately with its keys arranged according to the Keyball44 layout specification.
+///
+/// # Arguments
+///
+/// * `layers` - A slice of `Layer` structs containing the keyboard layout data
+///
+/// # Returns
+///
+/// A `String` containing the complete SVG document
 pub fn generate_svg(layers: &[Layer]) -> String {
     const KEY_HEIGHT: f32 = 60.0;
     const KEY_SPACING: f32 = 5.0;
