@@ -1,5 +1,7 @@
 use anyhow::Result;
 use regex::Regex;
+use svg::node::element::{Rectangle, Style, Text};
+use svg::Document;
 
 #[derive(Debug, Clone)]
 pub struct Layer {
@@ -157,39 +159,41 @@ pub fn generate_svg(layers: &[Layer]) -> String {
     let right_width = 6.0 * (key_width + KEY_SPACING);
     let svg_width = MARGIN * 2.0 + left_width + SPLIT_GAP + right_width;
 
-    let mut svg = String::new();
     let mut total_height = MARGIN;
 
-    // Start SVG (we'll update height later)
-    svg.push_str(&format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">"#,
-        svg_width as i32, 0, svg_width as i32, 0
-    ));
-    svg.push('\n');
+    // Calculate total height
+    for _ in layers {
+        let layer_height = 4.0 * (KEY_HEIGHT + KEY_SPACING) + 50.0;
+        total_height += layer_height + LAYER_SPACING;
+    }
+
+    // Create SVG document
+    let mut document = Document::new()
+        .set("width", svg_width as i32)
+        .set("height", total_height as i32)
+        .set("viewBox", (0, 0, svg_width as i32, total_height as i32));
 
     // Add styles
-    svg.push_str(&format!(
-        r#"<style>
-        .key {{ fill: white; stroke: #333; stroke-width: 2; }}
-        .key-text {{ fill: #333; font-family: monospace; font-size: {}px; text-anchor: middle; }}
-        .layer-title {{ fill: #333; font-family: sans-serif; font-size: 20px; font-weight: bold; }}
-    </style>"#,
-        FONT_SIZE
-    ));
-    svg.push('\n');
+    let style = Style::new(
+        r#"
+        .key { fill: white; stroke: #333; stroke-width: 2; }
+        .key-text { fill: #333; font-family: monospace; font-size: 11px; text-anchor: middle; }
+        .layer-title { fill: #333; font-family: sans-serif; font-size: 20px; font-weight: bold; }
+    "#,
+    );
+    document = document.add(style);
+
+    let mut y_offset = MARGIN;
 
     // Render each layer
     for layer in layers {
-        let y_offset = total_height;
-
         // Layer title
-        svg.push_str(&format!(
-            r#"<text x="{}" y="{}" class="layer-title">Layer {}</text>"#,
-            MARGIN,
-            y_offset + 30.0,
-            layer.index
-        ));
-        svg.push('\n');
+        let title = Text::new("")
+            .set("x", MARGIN)
+            .set("y", y_offset + 30.0)
+            .set("class", "layer-title")
+            .add(svg::node::Text::new(format!("Layer {}", layer.index)));
+        document = document.add(title);
 
         let layer_start_y = y_offset + 50.0;
 
@@ -216,20 +220,22 @@ pub fn generate_svg(layers: &[Layer]) -> String {
                 let key = all_keys[key_index];
 
                 // Draw key
-                svg.push_str(&format!(
-                    r#"<rect class="key" x="{}" y="{}" width="{}" height="{}" rx="5"/>"#,
-                    x, y, key_width, KEY_HEIGHT
-                ));
-                svg.push('\n');
+                let rect = Rectangle::new()
+                    .set("class", "key")
+                    .set("x", x)
+                    .set("y", y)
+                    .set("width", key_width)
+                    .set("height", KEY_HEIGHT)
+                    .set("rx", 5);
+                document = document.add(rect);
 
                 // Draw key label
-                svg.push_str(&format!(
-                    r#"<text class="key-text" x="{}" y="{}">{}</text>"#,
-                    x + key_width / 2.0,
-                    y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0,
-                    escape_xml(key)
-                ));
-                svg.push('\n');
+                let text = Text::new("")
+                    .set("class", "key-text")
+                    .set("x", x + key_width / 2.0)
+                    .set("y", y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0)
+                    .add(svg::node::Text::new(key.as_str()));
+                document = document.add(text);
 
                 key_index += 1;
             }
@@ -255,20 +261,22 @@ pub fn generate_svg(layers: &[Layer]) -> String {
                     let key = all_keys[key_index];
 
                     // Draw key
-                    svg.push_str(&format!(
-                        r#"<rect class="key" x="{}" y="{}" width="{}" height="{}" rx="5"/>"#,
-                        x, y, key_width, KEY_HEIGHT
-                    ));
-                    svg.push('\n');
+                    let rect = Rectangle::new()
+                        .set("class", "key")
+                        .set("x", x)
+                        .set("y", y)
+                        .set("width", key_width)
+                        .set("height", KEY_HEIGHT)
+                        .set("rx", 5);
+                    document = document.add(rect);
 
                     // Draw key label
-                    svg.push_str(&format!(
-                        r#"<text class="key-text" x="{}" y="{}">{}</text>"#,
-                        x + key_width / 2.0,
-                        y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0,
-                        escape_xml(key)
-                    ));
-                    svg.push('\n');
+                    let text = Text::new("")
+                        .set("class", "key-text")
+                        .set("x", x + key_width / 2.0)
+                        .set("y", y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0)
+                        .add(svg::node::Text::new(key.as_str()));
+                    document = document.add(text);
 
                     key_index += 1;
                 }
@@ -283,20 +291,22 @@ pub fn generate_svg(layers: &[Layer]) -> String {
                     let key = all_keys[key_index];
 
                     // Draw key
-                    svg.push_str(&format!(
-                        r#"<rect class="key" x="{}" y="{}" width="{}" height="{}" rx="5"/>"#,
-                        x, y, key_width, KEY_HEIGHT
-                    ));
-                    svg.push('\n');
+                    let rect = Rectangle::new()
+                        .set("class", "key")
+                        .set("x", x)
+                        .set("y", y)
+                        .set("width", key_width)
+                        .set("height", KEY_HEIGHT)
+                        .set("rx", 5);
+                    document = document.add(rect);
 
                     // Draw key label
-                    svg.push_str(&format!(
-                        r#"<text class="key-text" x="{}" y="{}">{}</text>"#,
-                        x + key_width / 2.0,
-                        y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0,
-                        escape_xml(key)
-                    ));
-                    svg.push('\n');
+                    let text = Text::new("")
+                        .set("class", "key-text")
+                        .set("x", x + key_width / 2.0)
+                        .set("y", y + KEY_HEIGHT / 2.0 + FONT_SIZE / 3.0)
+                        .add(svg::node::Text::new(key.as_str()));
+                    document = document.add(text);
 
                     key_index += 1;
                 }
@@ -304,28 +314,8 @@ pub fn generate_svg(layers: &[Layer]) -> String {
         }
 
         let layer_height = 4.0 * (KEY_HEIGHT + KEY_SPACING) + 50.0;
-        total_height += layer_height + LAYER_SPACING;
+        y_offset += layer_height + LAYER_SPACING;
     }
 
-    svg.push_str("</svg>");
-
-    // Update the height in the SVG header
-    let total_height_int = total_height as i32;
-    svg = svg.replace(
-        &format!(r#"height="{}" viewBox="0 0 {} {}"#, 0, svg_width as i32, 0),
-        &format!(
-            r#"height="{}" viewBox="0 0 {} {}"#,
-            total_height_int, svg_width as i32, total_height_int
-        ),
-    );
-
-    svg
-}
-
-fn escape_xml(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
+    document.to_string()
 }
