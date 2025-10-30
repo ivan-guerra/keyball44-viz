@@ -285,6 +285,13 @@ pub fn generate_svg(layers: &[Layer]) -> String {
         .set("height", total_height as i32)
         .set("viewBox", (0, 0, svg_width as i32, total_height as i32));
 
+    // Add background
+    let background = Rectangle::new()
+        .set("width", "100%")
+        .set("height", "100%")
+        .set("fill", "#faf8f3");
+    document = document.add(background);
+
     // Add enhanced styles with gradients, shadows, and color coding
     let style = Style::new(
         r#"
@@ -391,11 +398,6 @@ pub fn generate_svg(layers: &[Layer]) -> String {
                 let x = right_base_x
                     + right_offset * (key_width + KEY_SPACING)
                     + col_idx as f32 * (key_width + KEY_SPACING);
-
-                // Skip if this is an empty position in the layout
-                if row_idx == 3 && col_idx >= 3 {
-                    continue;
-                }
 
                 if !is_empty_key(key) || row_idx < 3 {
                     // Draw key
