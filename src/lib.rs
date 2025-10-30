@@ -216,12 +216,21 @@ fn get_key_class(key: &str, layer_index: usize) -> String {
 }
 
 fn extract_layer_number(key: &str) -> Option<usize> {
-    // Extract layer number from MO(n), TO(n), TG(n)
-    // Exclude LT (Layer Tap) as it's a dual-function key, not a pure layer switch
-    if key.starts_with("MO(") || key.starts_with("TO(") || key.starts_with("TG(") {
+    // Extract layer number from layer switching functions
+    if key.starts_with("MO(")
+        || key.starts_with("TO(")
+        || key.starts_with("TG(")
+        || key.starts_with("TT(")
+        || key.starts_with("OSL(")
+        || key.starts_with("DF(")
+    {
         let start = key.find('(')? + 1;
         let end = key.find(')')?;
         key[start..end].parse().ok()
+    } else if key.starts_with("LT(") || key.starts_with("LM(") {
+        let start = key.find('(')? + 1;
+        let comma = key.find(',')?;
+        key[start..comma].trim().parse().ok()
     } else {
         None
     }
